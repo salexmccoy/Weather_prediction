@@ -4,6 +4,9 @@ import pandas as pd
 import streamlit as st
 import altair as alt
 from dotenv import load_dotenv
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import r2_score
 
 # Load DB credentials
 load_dotenv("sql.env")
@@ -14,7 +17,7 @@ DB_CONFIG = {
     "password": os.getenv("DB_PASS")
 }
 
-# 🎨 Define a consistent color palette for event types
+# Define a consistent color palette for event types
 EVENT_COLORS = {
     "Farmers Market": "#1f77b4",
     "Outdoor Concert": "#ff7f0e",
@@ -26,7 +29,7 @@ event_color_scale = alt.Scale(
     range=list(EVENT_COLORS.values())
 )
 
-# 📦 Load event + weather + actual + prediction data
+# Load event + weather + actual + prediction data
 @st.cache_data
 def load_data():
     conn = psycopg2.connect(**DB_CONFIG)
@@ -55,7 +58,7 @@ def load_data():
 
 # Streamlit UI setup
 st.set_page_config(page_title="Event Turnout Dashboard", layout="wide")
-st.title("📊 Event Turnout Prediction Dashboard")
+st.title("Event Turnout Prediction Dashboard")
 
 df = load_data()
 df["event_date"] = pd.to_datetime(df["event_date"])  # Ensure datetime format
@@ -77,31 +80,71 @@ filtered = df[
     (df["event_date"] <= end_date)
 ]
 
-# ────────────────────────────────────────────────────────────────
-
-# 🎨 Event Type Color Legend
-st.subheader("🎨 Event Type Legend")
-legend_data = pd.DataFrame({"event_type": list(EVENT_COLORS.keys())})
-legend_chart = alt.Chart(legend_data).mark_square(size=200).encode(
-    y=alt.Y("event_type:N", axis=alt.Axis(title=None, labelLimit=100)),
-    color=alt.Color("event_type:N", scale=event_color_scale, legend=None)
-).properties(height=100)
-st.altair_chart(legend_chart, use_container_width=False)
 
 # ────────────────────────────────────────────────────────────────
-
 # Metrics
 col1, col2, col3 = st.columns(3)
 col1.metric("Total Events", len(filtered))
 col2.metric("Avg Actual Turnout", int(filtered["actual_turnout"].mean()))
 col3.metric("Avg Prediction Error", f'{(filtered["predicted_turnout"] - filtered["actual_turnout"]).abs().mean():.1f}')
 
-# 📍 Predicted vs Actual Turnout
-st.subheader("📍 Predicted vs Actual Turnout")
-st.scatter_chart(filtered[["actual_turnout", "predicted_turnout"]])
+# ────────────────────────────────────────────────────────────────
+# Predicted vs Actual Turnout (Improved)
+st.subheader(" Predicted vs Actual Turnout (All Events)")
 
-# 🌦️ Weather vs Turnout Charts
-st.subheader("🌦️ Turnout vs Weather Factors")
+# Compute R² score
+r2 = r2_score(filtered["actual_turnout"], filtered["predicted_turnout"])
+
+# Create figure
+fig, ax = plt.subplots()
+
+# Scatter points
+ax.scatter(
+    filtered["actual_turnout"],
+    filtered["predicted_turnout"],
+    alpha=0.7,
+    edgecolor='k',
+    s=60
+)
+
+
+# y = x reference line
+min_val = min(filtered["actual_turnout"].min(), filtered["predicted_turnout"].min())
+max_val = max(filtered["actual_turnout"].max(), filtered["predicted_turnout"].max())
+ax.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=1.5, label='y = x')
+
+
+# Labels and title with white text
+ax.set_xlabel("Actual Turnout", fontsize=10, color='white')
+ax.set_ylabel("Predicted Turnout", fontsize=10, color='white')
+
+# Set the ticks to white
+ax.tick_params(axis='both', colors='white')
+
+
+# R² annotation
+ax.text(0.05, 0.95, f"$R^2 = {r2:.2f}$", transform=ax.transAxes,
+        fontsize=12, verticalalignment='top', bbox=dict(facecolor='white', alpha=0.5))
+
+
+
+# Background blending with Streamlit (dark theme background color)
+fig.patch.set_facecolor('#2e2e2e')  # Dark background to match Streamlit's dark theme
+ax.set_facecolor('#2e2e2e')         # Dark background for axes
+
+
+# Remove top and right spines
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+
+# Display it
+st.pyplot(fig, use_container_width=True) # set to dynamically scale
+
+
+
+# ────────────────────────────────────────────────────────────────
+# Weather vs Turnout Charts
+st.subheader("Turnout vs Weather Factors")
 
 col1, col2 = st.columns(2)
 with col1:
@@ -124,8 +167,8 @@ with col2:
     )
     st.altair_chart(precip_chart, use_container_width=True)
 
-# 🎭 Boxplot by Event Type
-st.subheader("🎭 Turnout by Event Type")
+# Boxplot by Event Type
+st.subheader("Turnout by Event Type")
 
 box_data = filtered[["event_type", "actual_turnout"]]
 box_chart = alt.Chart(box_data).mark_boxplot(extent='min-max').encode(
@@ -135,6 +178,6 @@ box_chart = alt.Chart(box_data).mark_boxplot(extent='min-max').encode(
 ).properties(width=600)
 st.altair_chart(box_chart, use_container_width=True)
 
-# 📄 Raw Data
-with st.expander("📄 View Raw Data"):
+# Raw Data
+with st.expander("View Raw Data"):
     st.dataframe(filtered)

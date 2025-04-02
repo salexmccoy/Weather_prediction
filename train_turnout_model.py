@@ -61,7 +61,7 @@ def train_model(df):
     model.fit(X_train, y_train)
     preds = model.predict(X_test)
 
-    print("📊 Model Evaluation:")
+    print("Model Evaluation:")
     print(f"MAE: {mean_absolute_error(y_test, preds):.2f}")
     print(f"R² Score: {r2_score(y_test, preds):.2f}")
 
@@ -74,4 +74,4 @@ if __name__ == "__main__":
 
     # Save trained model to file
     joblib.dump(model, "turnout_model.pkl")
-    print("✅ Model saved to turnout_model.pkl")
+    print("Model saved to turnout_model.pkl")
